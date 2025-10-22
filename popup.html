@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeetingMind</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .header {
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .header p {
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .status-card {
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .status-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      opacity: 0.9;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      margin: 4px 0;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+    }
+
+    .status-dot.inactive {
+      background: #94a3b8;
+    }
+
+    .button {
+      width: 100%;
+      padding: 12px;
+      background: white;
+      color: #667eea;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 8px;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .button:active {
+      transform: translateY(0);
+    }
+
+    .button.secondary {
+      background: rgba(255,255,255,0.2);
+      color: white;
+    }
+
+    .button.secondary:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .info {
+      font-size: 12px;
+      opacity: 0.8;
+      line-height: 1.5;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .quick-actions {
+      margin-top: 12px;
+    }
+
+    .quick-actions h3 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      opacity: 0.9;
+    }
+
+    a {
+      color: white;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+      MeetingMind
+    </h1>
+    <p>AI Meeting Assistant</p>
+  </div>
+
+  <div class="content">
+    <div class="status-card">
+      <h3>AI Status</h3>
+      <div id="aiStatus">
+        <div class="status-indicator">
+          <div class="status-dot inactive"></div>
+          <span>Checking...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="quick-actions">
+      <h3>Quick Actions</h3>
+      <button class="button" id="openSidePanel">
+        📝 Open Notes Panel
+      </button>
+      <button class="button secondary" id="viewHistory">
+        📚 View Meeting History
+      </button>
+    </div>
+
+    <div class="info">
+      <strong>How to use:</strong>
+      <ol style="margin: 8px 0 0 20px; line-height: 1.6;">
+        <li>Join a meeting on Google Meet, Zoom, or Teams</li>
+        <li>Enable captions in the meeting</li>
+        <li>Click "Start AI Notes" button in meeting</li>
+        <li>AI will capture and summarize automatically</li>
+      </ol>
+    </div>
+
+    <div class="info" style="margin-top: 8px;">
+      💡 <strong>Tip:</strong> For best results, ensure meeting captions are enabled.
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
