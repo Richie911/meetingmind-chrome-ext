@@ -1,0 +1,102 @@
+/* Styles injected into meeting platform pages */
+
+.meetingmind-capture-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  z-index: 9999;
+  position: relative;
+  margin: 8px;
+}
+
+.meetingmind-capture-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5a67d8 0%, #6b3fa0 100%);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  transform: translateY(-1px);
+}
+
+.meetingmind-capture-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.meetingmind-capture-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.meetingmind-capture-btn.capturing {
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.meetingmind-capture-btn.capturing svg circle:last-child {
+  animation: pulse-circle 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 16px rgba(220, 53, 69, 0.6);
+  }
+}
+
+@keyframes pulse-circle {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+.meetingmind-capture-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Google Meet specific positioning */
+[data-call-controls-bottom-bar] .meetingmind-capture-btn {
+  margin: 0 8px;
+}
+
+/* Zoom specific positioning */
+.footer__inner .meetingmind-capture-btn,
+.meeting-client-controls .meetingmind-capture-btn {
+  margin: 0 8px;
+}
+
+/* Teams specific positioning */
+[data-tid="callingControls"] .meetingmind-capture-btn,
+.ts-calling-screen .meetingmind-capture-btn {
+  margin: 0 8px;
+}
+
+/* Notification animation */
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.meetingmind-notification {
+  animation: slideIn 0.3s ease;
+}
