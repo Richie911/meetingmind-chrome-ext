@@ -33,11 +33,18 @@ async function checkAIStatus() {
     let statusHTML = '';
 
     // Prompt API
-    if (response.promptAPI === 'readily') {
+    if (response.promptAPI === 'available' || response.promptAPI === 'downloadable') {
       statusHTML += `
         <div class="status-indicator">
           <div class="status-dot"></div>
           <span>Prompt API Ready</span>
+        </div>
+      `;
+    } else if (response.promptAPI === 'downloading') {
+      statusHTML += `
+        <div class="status-indicator">
+          <div class="status-dot" style="background: orange;"></div>
+          <span>Prompt API Downloading...</span>
         </div>
       `;
     } else {
@@ -50,11 +57,18 @@ async function checkAIStatus() {
     }
 
     // Summarizer API
-    if (response.summarizerAPI === 'readily') {
+    if (response.summarizerAPI === 'available' || response.summarizerAPI === 'downloadable') {
       statusHTML += `
         <div class="status-indicator">
           <div class="status-dot"></div>
           <span>Summarizer API Ready</span>
+        </div>
+      `;
+    } else if (response.summarizerAPI === 'downloading') {
+      statusHTML += `
+        <div class="status-indicator">
+          <div class="status-dot" style="background: orange;"></div>
+          <span>Summarizer API Downloading...</span>
         </div>
       `;
     } else {
@@ -67,11 +81,18 @@ async function checkAIStatus() {
     }
 
     // Writer API
-    if (response.writerAPI === 'readily') {
+    if (response.writerAPI === 'available' || response.writerAPI === 'downloadable') {
       statusHTML += `
         <div class="status-indicator">
           <div class="status-dot"></div>
           <span>Writer API Ready</span>
+        </div>
+      `;
+    } else if (response.writerAPI === 'downloading') {
+      statusHTML += `
+        <div class="status-indicator">
+          <div class="status-dot" style="background: orange;"></div>
+          <span>Writer API Downloading...</span>
         </div>
       `;
     } else {
