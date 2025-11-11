@@ -115,6 +115,9 @@ async function handleCaptureClick() {
 // Start capturing meeting
 async function startCapture() {
   try {
+    console.log('=== START CAPTURE INITIATED ===');
+    console.log('Platform:', platform);
+    console.log('Current URL:', window.location.href);
     updateButtonState('starting');
 
     // Check if extension context is valid
@@ -124,17 +127,21 @@ async function startCapture() {
 
     // Request capture permission
     const response = await chrome.runtime.sendMessage({ action: 'startCapture' });
+    console.log('Start capture response:', response);
 
     if (response && response.success) {
       isCapturing = true;
       updateButtonState('capturing');
       capturedCaptions = [];
 
+      console.log('Capture started successfully. Listening for captions...');
+
       // Open side panel for live notes
       try {
         await chrome.runtime.sendMessage({ action: 'openSidePanel' });
       } catch (e) {
         // Silent fail for side panel open
+        console.log('Side panel open failed (may not be supported):', e);
       }
 
       showNotification('AI Notes started - captions are being captured', 'success');
@@ -159,6 +166,9 @@ async function startCapture() {
 // Stop capturing meeting
 async function stopCapture() {
   try {
+    console.log('=== STOP CAPTURE INITIATED ===');
+    console.log('Total captions captured:', capturedCaptions.length);
+    console.log('Sample captions:', capturedCaptions.slice(0, 3));
     updateButtonState('stopping');
 
     // Check if extension context is valid
@@ -167,6 +177,7 @@ async function stopCapture() {
     }
 
     const response = await chrome.runtime.sendMessage({ action: 'stopCapture' });
+    console.log('Stop capture response:', response);
 
     if (response && response.success) {
       isCapturing = false;
@@ -196,17 +207,38 @@ async function stopCapture() {
 
 // Setup caption/transcript capture
 function setupCaptionCapture() {
-  let captionSelector;
+  let captionSelectors = [];
 
   if (platform === 'google-meet') {
-    captionSelector = '[jsname="tgaKEf"]'; // Google Meet captions
+    // Multiple fallback selectors for Google Meet (they change frequently)
+    captionSelectors = [
+      '[jsname="tgaKEf"]',                    // Current primary selector
+      '.a4cQT',                                // Alternative class
+      '[class*="caption"]',                    // Any element with caption in class
+      '[aria-label*="captions" i]',           // Accessibility label
+      '[data-auto-gen-transcript-caption]',   // Auto-generated transcript
+      '.iOzk7'                                 // Another known caption class
+    ];
   } else if (platform === 'zoom') {
-    captionSelector = '.caption__transcript-item'; // Zoom captions
+    captionSelectors = [
+      '.caption__transcript-item',
+      '[data-qa="caption-item"]',
+      '.caption-line',
+      '[class*="caption"]'
+    ];
   } else if (platform === 'teams') {
-    captionSelector = '[data-tid="closed-captions-v2-text"]'; // Teams captions
+    captionSelectors = [
+      '[data-tid="closed-captions-v2-text"]',
+      '[data-tid="closed-captions-text"]',
+      '[class*="closedCaption"]',
+      '[class*="caption"]'
+    ];
   }
 
-  if (!captionSelector) return;
+  if (captionSelectors.length === 0) {
+    console.warn('No caption selectors configured for platform:', platform);
+    return;
+  }
 
   // Observe for caption elements
   transcriptObserver = new MutationObserver((mutations) => {
@@ -215,16 +247,29 @@ function setupCaptionCapture() {
     mutations.forEach((mutation) => {
       mutation.addedNodes.forEach((node) => {
         if (node.nodeType === Node.ELEMENT_NODE) {
-          const captionElement = node.matches(captionSelector) ? node : node.querySelector(captionSelector);
+          let captionElement = null;
+
+          // Try each selector until we find a match
+          for (const selector of captionSelectors) {
+            try {
+              captionElement = node.matches(selector) ? node : node.querySelector(selector);
+              if (captionElement) {
+                break; // Found a match, stop searching
+              }
+            } catch (e) {
+              // Invalid selector, skip to next one
+              continue;
+            }
+          }
 
           if (captionElement) {
             const text = captionElement.textContent.trim();
             const speaker = extractSpeaker(captionElement);
 
-            // Check if this text was already captured
+            // Check if this text was already captured (avoid duplicates)
             const isDuplicate = capturedCaptions.some(caption => caption.text === text);
 
-            if (text && !isDuplicate) {
+            if (text && !isDuplicate && text.length > 2) { // Ignore very short text
               const captionData = {
                 text: text,
                 speaker: speaker,
@@ -232,6 +277,8 @@ function setupCaptionCapture() {
               };
 
               capturedCaptions.push(captionData);
+
+              console.log(`Captured caption (${capturedCaptions.length}):`, text.substring(0, 50));
 
               // Send to background for processing
               chrome.runtime.sendMessage({
@@ -241,6 +288,8 @@ function setupCaptionCapture() {
                   speaker: speaker,
                   timestamp: Date.now()
                 }
+              }).catch(err => {
+                console.warn('Failed to send transcript to background:', err);
               });
 
               // Update sidebar - store as plain text array for display
@@ -260,7 +309,32 @@ function setupCaptionCapture() {
     subtree: true
   });
 
-  console.log('Caption capture setup complete');
+  console.log('Caption capture setup complete with selectors:', captionSelectors);
+
+  // Diagnostic: Check if captions are currently visible
+  setTimeout(() => {
+    const foundCaptions = checkForCaptions(captionSelectors);
+    if (!foundCaptions && isCapturing) {
+      console.warn('No captions detected on page. Make sure captions are enabled in your meeting.');
+      showNotification('No captions detected. Please enable captions in your meeting settings.', 'warning');
+    }
+  }, 5000); // Check after 5 seconds
+}
+
+// Diagnostic function to check if captions exist on the page
+function checkForCaptions(selectors) {
+  for (const selector of selectors) {
+    try {
+      const elements = document.querySelectorAll(selector);
+      if (elements.length > 0) {
+        console.log(`Found ${elements.length} caption elements with selector: ${selector}`);
+        return true;
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+  return false;
 }
 
 // Extract speaker name from caption element
@@ -280,6 +354,15 @@ function extractSpeaker(element) {
 // Generate meeting summary
 async function generateMeetingSummary() {
   try {
+    // Check if we captured any captions
+    if (capturedCaptions.length === 0) {
+      showNotification('No captions were captured. Please enable captions in your meeting and try again.', 'error');
+      console.error('No captions captured. Captured array is empty.');
+      return;
+    }
+
+    console.log(`Generating summary with ${capturedCaptions.length} captured captions`);
+
     const response = await chrome.runtime.sendMessage({
       action: 'generateSummary',
       data: {
@@ -313,11 +396,13 @@ async function generateMeetingSummary() {
 
       showNotification('Meeting summary ready! Check the side panel', 'success');
     } else {
-      showNotification('Failed to generate summary', 'error');
+      const errorMessage = response.error || 'Failed to generate summary';
+      showNotification(errorMessage, 'error');
+      console.error('Summary generation failed:', errorMessage);
     }
   } catch (error) {
     console.error('Error generating summary:', error);
-    showNotification('Failed to generate summary', 'error');
+    showNotification(`Failed to generate summary: ${error.message}`, 'error');
   }
 }
 

@@ -1,7 +1,10 @@
 // Service worker for MeetingMind
 
-let activeCaptures = new Map(); // tabId -> { stream, transcript, startTime }
-let meetingSummaries = new Map(); // meetingId -> summary data
+// NOTE: Using chrome.storage.session instead of Map to persist data across service worker restarts
+// activeCaptures structure: { [tabId]: { transcript: [], startTime: number } }
+// meetingSummaries structure: { [meetingId]: { summary, keyPoints, actionItems, transcript, createdAt } }
+
+let meetingSummaries = new Map(); // meetingId -> summary data (kept in memory for quick access)
 
 // Keep service worker alive
 let keepAliveInterval;
@@ -65,29 +68,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'getCaptureStatus') {
-    const status = activeCaptures.has(sender.tab.id);
-    sendResponse({ isCapturing: status });
+    chrome.storage.session.get(`activeCapture_${sender.tab.id}`).then(result => {
+      const status = !!result[`activeCapture_${sender.tab.id}`];
+      sendResponse({ isCapturing: status });
+    });
+    return true;
   }
 });
 
 // Start capturing meeting
 async function handleStartCapture(tabId, sendResponse) {
   try {
-    // Check if already capturing
-    if (activeCaptures.has(tabId)) {
+    // Check if already capturing using session storage
+    const sessionKey = `activeCapture_${tabId}`;
+    const existingCapture = await chrome.storage.session.get(sessionKey);
+
+    if (existingCapture[sessionKey]) {
       sendResponse({ success: false, error: 'Already capturing this tab' });
       return;
     }
 
-    // Store capture info (no audio stream needed - we capture captions from DOM)
-    activeCaptures.set(tabId, {
-      transcript: [],
-      startTime: Date.now()
+    // Store capture info in session storage (persists across service worker restarts)
+    await chrome.storage.session.set({
+      [sessionKey]: {
+        transcript: [],
+        startTime: Date.now()
+      }
     });
 
+    console.log(`Started capture for tab ${tabId}`);
     sendResponse({ success: true });
 
   } catch (error) {
+    console.error('Error starting capture:', error);
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -95,7 +108,10 @@ async function handleStartCapture(tabId, sendResponse) {
 // Stop capturing meeting
 async function handleStopCapture(tabId, sendResponse) {
   try {
-    const capture = activeCaptures.get(tabId);
+    const sessionKey = `activeCapture_${tabId}`;
+    const result = await chrome.storage.session.get(sessionKey);
+    const capture = result[sessionKey];
+
     if (!capture) {
       sendResponse({ success: false, error: 'No active capture found' });
       return;
@@ -108,12 +124,15 @@ async function handleStopCapture(tabId, sendResponse) {
       endTime: Date.now()
     };
 
-    // Remove from active captures
-    activeCaptures.delete(tabId);
+    console.log(`Stopped capture for tab ${tabId}, transcript length: ${capture.transcript.length}`);
+
+    // Remove from session storage
+    await chrome.storage.session.remove(sessionKey);
 
     sendResponse({ success: true, data: transcriptData });
 
   } catch (error) {
+    console.error('Error stopping capture:', error);
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -121,20 +140,29 @@ async function handleStopCapture(tabId, sendResponse) {
 // Process transcript with AI
 async function handleProcessTranscript(tabId, data, sendResponse) {
   try {
-    // Store transcript line in background
-    if (activeCaptures.has(tabId)) {
-      activeCaptures.get(tabId).transcript.push({
+    const sessionKey = `activeCapture_${tabId}`;
+    const result = await chrome.storage.session.get(sessionKey);
+    const capture = result[sessionKey];
+
+    // Store transcript line in session storage
+    if (capture) {
+      capture.transcript.push({
         text: data.text,
         timestamp: data.timestamp,
         speaker: data.speaker
       });
-      console.log(`Transcript stored for tab ${tabId}:`, data.text.substring(0, 50));
+
+      // Update session storage with new transcript entry
+      await chrome.storage.session.set({ [sessionKey]: capture });
+
+      console.log(`Transcript stored for tab ${tabId} (${capture.transcript.length} entries):`, data.text.substring(0, 50));
     } else {
-      console.warn(`No active capture for tab ${tabId}`);
+      console.warn(`No active capture for tab ${tabId} - user may need to start capture first`);
     }
 
     sendResponse({ success: true });
   } catch (error) {
+    console.error('Error processing transcript:', error);
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -149,8 +177,10 @@ async function handleGenerateSummary(tabId, data, sendResponse) {
       error: null
     };
 
-    // Get transcript from activeCaptures (the source of truth)
-    const capture = activeCaptures.get(tabId);
+    // Get transcript from session storage (the source of truth)
+    const sessionKey = `activeCapture_${tabId}`;
+    const result = await chrome.storage.session.get(sessionKey);
+    const capture = result[sessionKey];
     const transcript = capture ? capture.transcript : data.transcript;
 
     console.log('Generating summary for tabId:', tabId);
@@ -158,7 +188,7 @@ async function handleGenerateSummary(tabId, data, sendResponse) {
     console.log('First few entries:', transcript ? transcript.slice(0, 3) : []);
 
     if (!transcript || transcript.length === 0) {
-      throw new Error('No transcript data available');
+      throw new Error('No transcript data available. Please ensure:\n1. Captions are enabled in your meeting\n2. You clicked "Start AI Notes" before the meeting\n3. People are speaking in the meeting');
     }
 
     // Check if AI APIs are available (try both patterns)
@@ -229,6 +259,7 @@ List all action items, tasks, and follow-ups mentioned. Format as a bulleted lis
     sendResponse({ success: true, results, meetingId });
 
   } catch (error) {
+    console.error('Error in handleGenerateSummary:', error);
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -360,12 +391,12 @@ async function checkAIAPIs() {
 }
 
 // Clean up when tabs close
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (activeCaptures.has(tabId)) {
-    const capture = activeCaptures.get(tabId);
-    if (capture.stream) {
-      capture.stream.getTracks().forEach(track => track.stop());
-    }
-    activeCaptures.delete(tabId);
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  const sessionKey = `activeCapture_${tabId}`;
+  const result = await chrome.storage.session.get(sessionKey);
+
+  if (result[sessionKey]) {
+    console.log(`Cleaning up capture for closed tab ${tabId}`);
+    await chrome.storage.session.remove(sessionKey);
   }
 });
